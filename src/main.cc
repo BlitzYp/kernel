@@ -1,4 +1,5 @@
 #include <cstdint>
+#include "../libs/blitz_stdio.h"
 #ifdef WINDOWS
 #error This is not windows you idiot
 #endif
@@ -29,6 +30,13 @@ void clear()
 static inline void putchar(uint8_t ch, Color color) 
 {
   video_buffer[video_position++] = (color << 8) | ch;
+}
+
+static inline uint8_t strlen(const char* src) 
+{
+  uint8_t i = 0;
+  for (;*src;i++,src++);
+  return i; 
 }
 
 void vga_write(const char* str, Color color) 
