@@ -1,5 +1,5 @@
 ; contains code meant for the NASM assembler for booting our operating system, and passing info to multiboot, which is used by grub
-bits 64
+BITS 64
 section .multiboot ; for multiboot
     dd 0x1BADB002 ; magic number
     dd 0 ; boot flags, we have none
