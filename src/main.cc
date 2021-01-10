@@ -6,10 +6,10 @@ uint16_t* terminal_buffer = (uint16_t*) 0xB8000;
 
 extern unsigned char keyboard_map[128];
 
-extern void keyboard_handler(void);
-extern char read_port(unsigned short port);
-extern void write_port(unsigned short port, unsigned char data);
-extern void load_idt(unsigned long *idt_ptr);
+extern "C" void keyboard_handler(void);
+extern "C" char read_port(unsigned short port);
+extern "C" void write_port(unsigned short port, unsigned char data);
+extern "C" void load_idt(unsigned long *idt_ptr);
 
 static const uint16_t VGA_WIDTH = 80;
 static const uint16_t VGA_HEIGHT = 25;
@@ -46,10 +46,6 @@ enum RETURN_CODES { // can be handled by the assembly later, returned by start_k
 // IDT stuff; an IDT is an interrupt descriptor table, we can use it for recieving interrupts.
 // partially taken from osdev.
 
-
-
-
-
 size_t vga_index;
 
 static inline uint8_t vga_entry_color(VGA_COLOR fg, VGA_COLOR bg) {
@@ -82,6 +78,7 @@ void vga_write(const char *str, VGA_COLOR fg) {
 void vga_putchar(const unsigned char character, VGA_COLOR fg) {
     terminal_buffer[vga_index] = (unsigned short)character | (unsigned short)fg << 8;
 }
+
 
 extern "C" void keyboard_handler_main() {
 	unsigned char status;
@@ -174,6 +171,7 @@ void idt_init() {
 }
 
 extern "C" uint8_t start_kernel() {
+    idt_init();
     vga_index = 0;
     init_vga_textmode();
     vga_write("testing...", VGA_COLOR::WHITE);
