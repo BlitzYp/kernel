@@ -77,6 +77,7 @@ void vga_write(const char *str, VGA_COLOR fg) {
 
 void vga_putchar(const unsigned char character, VGA_COLOR fg) {
     terminal_buffer[vga_index] = (unsigned short)character | (unsigned short)fg << 8;
+    vga_index++;
 }
 
 
@@ -92,7 +93,7 @@ extern "C" void keyboard_handler_main() {
 	// first bit (0x01) will only be set if the buffer is not empty, aka input has been recieved
 	if (status & 0x01) {
 		keycode = read_port(0x60); // read the keyboard data port at 0x60
-		if (keycode < 0) // idk what the fuck your keyboard is lmao
+		if (keycode < 0) // what... is your keyboard...
 			return;
 
 		if (keycode == 0x1C) { // enter
@@ -113,6 +114,11 @@ struct IDTEntry {
 };
 
 IDTEntry IDT[256]; // make a 256 long IDT.
+
+void kb_init() {
+        /* 0xFD is 11111101 - enables only IRQ1, which is the handler for keyboard input */
+        write_port(0x21, 0xFD);
+}
 
 
 void idt_init() {
@@ -172,8 +178,9 @@ void idt_init() {
 
 extern "C" uint8_t start_kernel() {
     idt_init();
+    kb_init();
     vga_index = 0;
     init_vga_textmode();
-    vga_write("testing...", VGA_COLOR::WHITE);
+//     vga_write("testing...", VGA_COLOR::WHITE);
     return (uint8_t) RETURN_CODES::HALT;
 }
