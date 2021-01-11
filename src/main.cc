@@ -8,7 +8,7 @@
 #define INTERRUPT_GATE 0x8e
 #define KERNEL_CODE_SEGMENT_OFFSET 0x08
 #define ENTER_KEY_CODE 0x1C
-#define IDT_SIZE 255
+#define IDT_SIZE 256
 
 extern uint8_t keyboard_map[128];
 extern "C" void keyboard_handler(void);
@@ -102,57 +102,59 @@ void vga_putint8_t(const uint8_t character, VGA_COLOR fg) {
     vga_index++;
 }
 
+void idt_init() {
+  unsigned long keyboard_address;
+  unsigned long idt_address;
+  unsigned long idt_ptr[2];
 
-void init_idt() {
-	unsigned long keyboard_address;
-	unsigned long idt_address;
-	unsigned long idt_ptr[2];
+  // get address of the keyboard handler function...
+  keyboard_address = (unsigned long)keyboard_handler;
+  // and register yourself, ask for it to call that function...
+  IDT[0x21].offset_lowerbits = keyboard_address & 0xffff;
+  IDT[0x21].selector = 0x08;
+  IDT[0x21].zero = 0;
+  IDT[0x21].type_attr = 0x8e;
+  IDT[0x21].offset_higherbits = (keyboard_address & 0xffff0000) >> 16;
 
-	/* populate IDT entry of keyboard's interrupt */
-	keyboard_address = (unsigned long)keyboard_handler;
-	IDT[0x21].offset_lowerbits = keyboard_address & 0xffff;
-	IDT[0x21].selector = KERNEL_CODE_SEGMENT_OFFSET;
-	IDT[0x21].zero = 0;
-	IDT[0x21].type_attr = INTERRUPT_GATE;
-	IDT[0x21].offset_higherbits = (keyboard_address & 0xffff0000) >> 16;
+  /*     Ports
+   *	 PIC1	PIC2
+   *Command 0x20	0xA0
+   *Data	 0x21	0xA1
+   */
 
-	/*     Ports
-	*	 PIC1	PIC2
-	*Command 0x20	0xA0
-	*Data	 0x21	0xA1
-	*/
+  // almost all of this writing and reading from ports is from
+  // https://pdos.csail.mit.edu/6.828/2014/readings/hardware/8259A.pdf. very
+  // useful resource
 
-	/* ICW1 - begin initialization */
-	write_port(0x20, 0x11);
-	write_port(0xA0, 0x11);
+  // start everything
+  write_port(0x20, 0x11);
+  write_port(0xA0, 0x11);
 
-	/* ICW2 - remap offset address of IDT */
-	/*
-	* In x86 protected mode, we have to remap the PICs beyond 0x20 because
-	* Intel have designated the first 32 interrupts as "reserved" for cpu exceptions
-	*/
-	write_port(0x21, 0x20);
-	write_port(0xA1, 0x28);
+  // if we are in protected mode, which we will be in the future we need to
+  // remap the PICs because the first 32 (0x20 == 32) are reserved. so increase
+  // the offset. so set icw2.
+  write_port(0x21, 0x20);
+  write_port(0xA1, 0x28);
 
-	/* ICW3 - setup cascading */
-	write_port(0x21, 0x00);
-	write_port(0xA1, 0x00);
+  // setup listening for interrupts with icw3.
+  write_port(0x21, 0x00);
+  write_port(0xA1, 0x00);
 
-	/* ICW4 - environment info */
-	write_port(0x21, 0x01);
-	write_port(0xA1, 0x01);
-	/* Initialization finished */
+  // get info about the environment by writing to icw4.
+  write_port(0x21, 0x01);
+  write_port(0xA1, 0x01);
+  // finished initalizing.
 
-	/* mask interrupts */
-	write_port(0x21, 0xff);
-	write_port(0xA1, 0xff);
+  // mask all interrupts with 0xff
+  write_port(0x21, 0xff);
+  write_port(0xA1, 0xff);
 
-	/* fill the IDT descriptor */
-	idt_address = (unsigned long)IDT;
-	idt_ptr[0] = (sizeof(IDTEntry) * IDT_SIZE) + ((idt_address & 0xffff) << 16);
-	idt_ptr[1] = idt_address >> 16;
+  // populate the IDT descriptor
+  idt_address = (unsigned long)IDT;
+  idt_ptr[0] = ((sizeof(IDTEntry)) * 256) + ((idt_address & 0xffff) << 16);
+  idt_ptr[1] = idt_address >> 16;
 
-	load_idt(idt_ptr);
+  load_idt(idt_ptr);
 }
 
 void keyboard_irq1_init() {
@@ -171,7 +173,6 @@ void vga_init() {
 	while (i < 80 * 25 * 2) {
 		vidptr[i++] = ' ';
 		vidptr[i++] = 0x07;
-	}
 }
 
 extern "C" void keyboard_handler_main() {
