@@ -197,7 +197,7 @@ extern "C" void keyboard_handler_main() {
 			return;
 		}
 
-		// print the int8_tacter
+		// print the character
 		vidptr[current_loc++] = keyboard_map[(uint8_t) keycode];
 		// if we don't add an ascii bell, it triple faults or results in some very weird behavior.
 		// im probably doing something wrong here, lol.
@@ -212,7 +212,6 @@ extern "C" uint8_t _start() {
 
 	init_idt();
 	keyboard_irq1_init();
-
-	while(1); // temp hang to avoid infinite rebooting
-	return (uint8_t) RETURN_CODES::HALT;
+	while (1) {}
+	// return (uint8_t) RETURN_CODES::HALT;
 }

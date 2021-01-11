@@ -1,10 +1,17 @@
-.text
+.set MULTIBOOT_MAGIC,       0x1BADB002 # magic shit
+.set MULTIBOOT_ALIGN,       0x00000001 # align all boot modules
+.set MULTIBOOT_MEMINFO,     0x00000002 # tell the kernel about memory
+.set MULTIBOOT_FLAGS,       MULTIBOOT_ALIGN | MULTIBOOT_MEMINFO # xor the flags
+.set MULTIBOOT_CHECKSUM, -(MULTIBOOT_MAGIC + MULTIBOOT_FLAGS) # checksum
 
-# multiboot spec
-.align 4
-.long 0x1BADB002 # magic number.
-.long 0 # flags to multiboot, currently none
-.long -(0x1BADB002 + 0) # checksum so that multiboot knows everything is ok 👍
+.section .multiboot
+.align 4 # alignment
+multiboot_header:
+    .int 0x1BADB002 # magick
+    .int 1 | 2 # flags
+    .int -(0x1BADB002 + (1 | 2))
+
+.section .text
 
 # exports to C++:
 .global start
@@ -42,9 +49,14 @@ start:
     cli 
     movl $stack_space, %esp
     call _start
-    hlt 
+    cli
+    jmp hang
 
-.bss
+hang:
+    hlt
+    jmp hang
+
+.section .bss
 .skip 8192
 stack_space:
  

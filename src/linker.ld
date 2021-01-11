@@ -9,5 +9,6 @@ SECTIONS
    }
    .data : { *(.data) }
    .bss  : { *(.bss)  }
+   .multiboot : { *(.multiboot) }
  }
 
