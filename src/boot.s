@@ -29,20 +29,20 @@ write_port:
     ret
 
 load_idt:
-	movl 4(%esp), %edx
-	lidt (%edx)
+    movl 4(%esp), %edx
+    lidt (%edx)
     sti 
-	ret
+    ret
 
 keyboard_handler:                 
-	call keyboard_handler_main # cheat and write it in C :tm:
-	iretl
+    call keyboard_handler_main # cheat and write it in C :tm:
+    iretl
 
 start:
-	cli 
-	movl $stack_space, %esp
-	call _start
-	hlt 
+    cli 
+    movl $stack_space, %esp
+    call _start
+    hlt 
 
 .bss
 .skip 8192
