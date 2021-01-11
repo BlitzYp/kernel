@@ -205,7 +205,7 @@ extern "C" void keyboard_handler_main() {
 	}
 }
 
-extern "C" void _start() {
+extern "C" uint8_t _start() {
 	init_vga_textmode();
 	vga_write("testing", VGA_COLOR::WHITE);
 	vga_write_newline();
@@ -214,4 +214,5 @@ extern "C" void _start() {
 	keyboard_irq1_init();
 
 	while(1); // temp hang to avoid infinite rebooting
+	return (uint8_t) RETURN_CODES::HALT;
 }
