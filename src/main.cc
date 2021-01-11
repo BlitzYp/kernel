@@ -102,7 +102,7 @@ void vga_putint8_t(const uint8_t character, VGA_COLOR fg) {
     vga_index++;
 }
 
-void idt_init() {
+void init_idt() {
   unsigned long keyboard_address;
   unsigned long idt_address;
   unsigned long idt_ptr[2];
@@ -173,6 +173,7 @@ void vga_init() {
 	while (i < 80 * 25 * 2) {
 		vidptr[i++] = ' ';
 		vidptr[i++] = 0x07;
+	}
 }
 
 extern "C" void keyboard_handler_main() {
