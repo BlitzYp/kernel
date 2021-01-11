@@ -1,15 +1,38 @@
-#include <cstdint>
-#include <cstddef>
+
 #include "keymap.h"
+#include <cstddef>
+#include <cstdint>
+
+#define KEYBOARD_DATA_PORT 0x60
+#define KEYBOARD_STATUS_PORT 0x64
+#define INTERRUPT_GATE 0x8e
+#define KERNEL_CODE_SEGMENT_OFFSET 0x08
+#define ENTER_KEY_CODE 0x1C
+#define IDT_SIZE 255
+
+extern uint8_t keyboard_map[128];
+extern "C" void keyboard_handler(void);
+extern "C" int8_t read_port(unsigned short port);
+extern "C" void write_port(unsigned short port, uint8_t data);
+extern "C" void load_idt(unsigned long *idt_ptr);
+
+/* current cursor location */
+unsigned int current_loc = 0;
+/* video memory begins at address 0xb8000 */
+int8_t *vidptr = (int8_t*)0xb8000;
+
+struct IDTEntry {
+	unsigned short int offset_lowerbits;
+	unsigned short int selector;
+	uint8_t zero;
+	uint8_t type_attr;
+	unsigned short int offset_higherbits;
+};
+
+IDTEntry IDT[IDT_SIZE];
 
 uint16_t* terminal_buffer = (uint16_t*) 0xB8000;
 
-extern unsigned char keyboard_map[128];
-
-extern "C" void keyboard_handler(void);
-extern "C" char read_port(unsigned short port);
-extern "C" void write_port(unsigned short port, unsigned char data);
-extern "C" void load_idt(unsigned long *idt_ptr);
 
 static const uint16_t VGA_WIDTH = 80;
 static const uint16_t VGA_HEIGHT = 25;
@@ -43,8 +66,7 @@ enum RETURN_CODES { // can be handled by the assembly later, returned by start_k
 };
 
 
-// IDT stuff; an IDT is an interrupt descriptor table, we can use it for recieving interrupts.
-// partially taken from osdev.
+
 
 size_t vga_index;
 
@@ -52,7 +74,7 @@ static inline uint8_t vga_entry_color(VGA_COLOR fg, VGA_COLOR bg) {
 	return fg | bg << 4;
 }
  
-static inline uint16_t vga_entry(unsigned char uc, uint8_t color) {
+static inline uint16_t vga_entry(uint8_t uc, uint8_t color) {
 	return (uint16_t) uc | (uint16_t) color << 8;
 }
 
@@ -66,73 +88,32 @@ void init_vga_textmode() {
 	}
 }
 
-void vga_write(const char *str, VGA_COLOR fg) {
+void vga_write(const char* str, VGA_COLOR fg) {
     size_t index = 0;
     while (str[index]) {
-            terminal_buffer[vga_index] =  (unsigned short)str[index]|(unsigned short)fg << 8; 
-            index++;
-            vga_index++;
+    	terminal_buffer[vga_index] =  (unsigned short)str[index] | (unsigned short)fg << 8; 
+        index++;
+        vga_index++;
     }
 }
 
-void vga_putchar(const unsigned char character, VGA_COLOR fg) {
+void vga_putint8_t(const uint8_t character, VGA_COLOR fg) {
     terminal_buffer[vga_index] = (unsigned short)character | (unsigned short)fg << 8;
     vga_index++;
 }
 
 
-extern "C" void keyboard_handler_main() {
-	unsigned char status;
-	char keycode;
-
-	// write end of interrupt, so that we can recieve more.
-	write_port(0x20, 0x20);
-
-	// read the keyboard status port at 0x64
-	status = read_port(0x64);
-	// first bit (0x01) will only be set if the buffer is not empty, aka input has been recieved
-	if (status & 0x01) {
-		keycode = read_port(0x60); // read the keyboard data port at 0x60
-		if (keycode < 0) // what... is your keyboard...
-			return;
-
-		if (keycode == 0x1C) { // enter
-			vga_index += 80; // add newline
-			return;
-		}
-
-        vga_putchar(keyboard_map[(unsigned char) keycode], VGA_COLOR::LIGHT_CYAN); // write char to keyboard. in a bright and bold color to differentiate.
-	}
-}
-
-struct IDTEntry {
-	unsigned short int offset_lowerbits;
-	unsigned short int selector;
-	unsigned char zero;
-	unsigned char type_attr;
-	unsigned short int offset_higherbits;
-};
-
-IDTEntry IDT[256]; // make a 256 long IDT.
-
-void kb_init() {
-        /* 0xFD is 11111101 - enables only IRQ1, which is the handler for keyboard input */
-        write_port(0x21, 0xFD);
-}
-
-
-void idt_init() {
+void init_idt() {
 	unsigned long keyboard_address;
 	unsigned long idt_address;
 	unsigned long idt_ptr[2];
 
-	// get address of the keyboard handler function...
+	/* populate IDT entry of keyboard's interrupt */
 	keyboard_address = (unsigned long)keyboard_handler;
-	// and register yourself, ask for it to call that function...
-	IDT[0x21].offset_lowerbits = keyboard_address & 0xffff; 
-	IDT[0x21].selector = 0x08;
+	IDT[0x21].offset_lowerbits = keyboard_address & 0xffff;
+	IDT[0x21].selector = KERNEL_CODE_SEGMENT_OFFSET;
 	IDT[0x21].zero = 0;
-	IDT[0x21].type_attr = 0x8e;
+	IDT[0x21].type_attr = INTERRUPT_GATE;
 	IDT[0x21].offset_higherbits = (keyboard_address & 0xffff0000) >> 16;
 
 	/*     Ports
@@ -141,46 +122,96 @@ void idt_init() {
 	*Data	 0x21	0xA1
 	*/
 
-	// almost all of this writing and reading from ports is from https://pdos.csail.mit.edu/6.828/2014/readings/hardware/8259A.pdf. 
-	// very useful resource
-
-	// start everything
+	/* ICW1 - begin initialization */
 	write_port(0x20, 0x11);
 	write_port(0xA0, 0x11);
 
-
-	// if we are in protected mode, which we will be in the future we need to remap
-	// the PICs because the first 32 (0x20 == 32) are reserved. so increase
-	// the offset. so set icw2.
+	/* ICW2 - remap offset address of IDT */
+	/*
+	* In x86 protected mode, we have to remap the PICs beyond 0x20 because
+	* Intel have designated the first 32 interrupts as "reserved" for cpu exceptions
+	*/
 	write_port(0x21, 0x20);
 	write_port(0xA1, 0x28);
 
-	// setup listening for interrupts with icw3.
+	/* ICW3 - setup cascading */
 	write_port(0x21, 0x00);
 	write_port(0xA1, 0x00);
 
-	// get info about the environment by writing to icw4.
+	/* ICW4 - environment info */
 	write_port(0x21, 0x01);
 	write_port(0xA1, 0x01);
-	// finished initalizing.
+	/* Initialization finished */
 
-	// mask all interrupts with 0xff
+	/* mask interrupts */
 	write_port(0x21, 0xff);
 	write_port(0xA1, 0xff);
 
-	// populate the IDT descriptor
+	/* fill the IDT descriptor */
 	idt_address = (unsigned long)IDT;
-	idt_ptr[0] = ((sizeof (IDTEntry)) * 256) + ((idt_address & 0xffff) << 16);
+	idt_ptr[0] = (sizeof(IDTEntry) * IDT_SIZE) + ((idt_address & 0xffff) << 16);
 	idt_ptr[1] = idt_address >> 16;
 
 	load_idt(idt_ptr);
 }
 
-extern "C" uint8_t start_kernel() {
-    idt_init();
-    kb_init();
-    vga_index = 0;
-    init_vga_textmode();
-//     vga_write("testing...", VGA_COLOR::WHITE);
-    return (uint8_t) RETURN_CODES::HALT;
+void keyboard_irq1_init() {
+	// 0xFD corresponds to IRQ1, we can read this for keyboard interrupts 
+	write_port(0x21, 0xFD);
+}
+
+
+void vga_write_newline() {
+	size_t line_size = 80 * 2;
+	current_loc = current_loc + (line_size - current_loc % (line_size));
+}
+
+void vga_init() {
+	unsigned int i = 0;
+	while (i < 80 * 25 * 2) {
+		vidptr[i++] = ' ';
+		vidptr[i++] = 0x07;
+	}
+}
+
+extern "C" void keyboard_handler_main() {
+
+	// send an End-Of-Interrupt (0x20) to port 0x20.
+	// not issuing an EOI makes it think we are still reading
+	// the buffer. therefore we do not recieve more interrupts.
+	// this tells the interrupts controller that we are done
+	// (we will still be able to read from the port)
+
+	write_port(0x20, 0x20);
+
+	uint8_t status = read_port(KEYBOARD_STATUS_PORT);
+	int8_t keycode;
+
+    // first bit, 0x01 (or 1) of the status from the keyboard status port 0x64 will be set to 1 if the buffer of text is not empty;
+	// in other words, a key has been pressed
+	if (status & 0x01) {
+		keycode = read_port(KEYBOARD_DATA_PORT); // read the ascii keycode from the dataport 0x60
+		if (keycode < 0) return;
+		if (keycode == ENTER_KEY_CODE) { // hit enter, so add a newline
+			vga_write_newline();
+			return;
+		}
+
+		// print the int8_tacter
+		vidptr[current_loc++] = keyboard_map[(uint8_t) keycode];
+		// if we don't add an ascii bell, it triple faults or results in some very weird behavior.
+		// im probably doing something wrong here, lol.
+		vidptr[current_loc++] = 0x07;
+	}
+}
+
+extern "C" void _start() {
+	init_vga_textmode();
+	vga_write("testing", VGA_COLOR::WHITE);
+	vga_write_newline();
+
+	init_idt();
+	keyboard_irq1_init();
+
+	while(1); // temp hang to avoid infinite rebooting
 }
