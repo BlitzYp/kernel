@@ -1,4 +1,3 @@
-
 #include "keymap.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -90,7 +89,7 @@ void init_vga_textmode() {
 void vga_write(const char* str, VGA_COLOR fg) {
     size_t index = 0;
     while (str[index]) {
-    	terminal_buffer[vga_index] =  (unsigned short)str[index] | (unsigned short)fg << 8; 
+    	terminal_buffer[vga_index] = (unsigned short)str[index] | (unsigned short)fg << 8; 
         index++;
         vga_index++;
     }
@@ -195,12 +194,12 @@ size_t strlen(const char* str) {
 
 bool strequ(const char *l, const char *r) {
     for (;*l == *r && *l; l++, r++);
-    return !(*(unsigned char *)l - *(unsigned char *)r);
+    return *l == *r;
 }
 
 void command_parse(const char* command) {
 	if (strequ(command, "bloat")) {
-		vga_write("Congrats, you have successfully bloated :shibaheart:", VGA_COLOR::WHITE);
+		vga_write("Congrats, you have successfully bloated; nice.", VGA_COLOR::WHITE);
 	} else if (strequ(command, "morebloat")) {
 		vga_write("More bloat? Ok then...", VGA_COLOR::WHITE);
 	} else {
