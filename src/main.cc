@@ -1,12 +1,13 @@
 
-#include "keymap.h"
+#include "keymap.hpp"
 #include <cstddef>
 #include <cstdint>
 
-#define KEYBOARD_DATA_PORT 0x60
-#define KEYBOARD_STATUS_PORT 0x64
-#define ENTER_KEY_CODE 0x1C
-#define IDT_SIZE 256
+
+const size_t KEYBOARD_DATA_PORT = 0x60;
+const size_t KEYBOARD_STATUS_PORT = 0x64;
+const size_t ENTER_KEY_CODE = 0x1C;
+const size_t IDT_SIZE = 256; 
 
 extern uint8_t keyboard_map[128];
 extern "C" void keyboard_handler(void);
@@ -20,11 +21,11 @@ unsigned int current_loc = 0;
 int8_t *vidptr = (int8_t*)0xb8000;
 
 struct IDTEntry {
-	unsigned short int offset_lowerbits;
-	unsigned short int selector;
+	uint16_t offset_lowerbits;
+	uint16_t selector;
 	uint8_t zero;
 	uint8_t type_attr;
-	unsigned short int offset_higherbits;
+	uint16_t offset_higherbits;
 };
 
 IDTEntry IDT[IDT_SIZE];
@@ -186,6 +187,27 @@ size_t calcsize() {
 	return counter;
 }
 
+size_t strlen(const char* str) {
+	size_t x = 0;
+	while (*str) x++;
+	return x;
+}
+
+bool strequ(const char *l, const char *r) {
+    for (;*l == *r && *l; l++, r++);
+    return !(*(unsigned char *)l - *(unsigned char *)r);
+}
+
+void command_parse(const char* command) {
+	if (strequ(command, "bloat")) {
+		vga_write("Congrats, you have successfully bloated :shibaheart:", VGA_COLOR::WHITE);
+	} else if (strequ(command, "morebloat")) {
+		vga_write("More bloat? Ok then...", VGA_COLOR::WHITE);
+	} else {
+		vga_write(command, VGA_COLOR::WHITE);
+	}
+}
+
 extern "C" void keyboard_handler_main() {
 
 	// send an End-Of-Interrupt (0x20) to port 0x20.
@@ -209,9 +231,9 @@ extern "C" void keyboard_handler_main() {
 			vga_write_newline();
 			char _stuff[512];
 			for (i = 0; i < 511; i++) {
-				_stuff[i] = keyboard_map[(uint8_t)stuff[i]];
+				_stuff[i] = keyboard_map[(uint8_t) stuff[i]];
 			}
-			vga_write(_stuff, VGA_COLOR::LIGHT_CYAN);
+			command_parse(_stuff);
 			// zero it out
 			for (i = 0; i < 511; i++) {
 				stuff[i] = 0;
@@ -236,5 +258,5 @@ extern "C" uint8_t _start() {
 	init_idt();
 	keyboard_irq1_init();
 	while (1) {}
-	// return (uint8_t) RETURN_CODES::HALT;
+	return (uint8_t) RETURN_CODES::HALT;
 }

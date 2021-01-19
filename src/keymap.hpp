@@ -1,6 +1,7 @@
+#include <cstddef>
+#include <cstdint>
 
-unsigned char keyboard_map[128] =
-{
+uint8_t keyboard_map[128] = {
     0,  27, '1', '2', '3', '4', '5', '6', '7', '8',	/* 9 */
   '9', '0', '-', '=', '\b',	/* Backspace */
   '\t',			/* Tab */
