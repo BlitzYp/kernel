@@ -95,7 +95,7 @@ void vga_write(const char* str, VGA_COLOR fg) {
     }
 }
 
-void vga_putint8_t(const uint8_t character, VGA_COLOR fg) {
+void vga_putchar(const char character, VGA_COLOR fg) {
     terminal_buffer[vga_index] = (unsigned short)character | (unsigned short)fg << 8;
     vga_index++;
 }
@@ -174,6 +174,18 @@ void vga_init() {
 	}
 }
 
+char stuff[512] = {0};
+
+size_t calcsize() {
+	size_t counter = 0;
+	for (size_t y = 0; y < 511; y++) {
+		if (stuff[y] != 0) {
+			counter++;
+		}
+	}
+	return counter;
+}
+
 extern "C" void keyboard_handler_main() {
 
 	// send an End-Of-Interrupt (0x20) to port 0x20.
@@ -186,6 +198,7 @@ extern "C" void keyboard_handler_main() {
 
 	uint8_t status = read_port(KEYBOARD_STATUS_PORT);
 	int8_t keycode;
+	size_t i;
 
     // first bit, 0x01 (or 1) of the status from the keyboard status port 0x64 will be set to 1 if the buffer of text is not empty;
 	// in other words, a key has been pressed
@@ -194,11 +207,21 @@ extern "C" void keyboard_handler_main() {
 		if (keycode < 0) return;
 		if (keycode == ENTER_KEY_CODE) { // hit enter, so add a newline
 			vga_write_newline();
+			char _stuff[512];
+			for (i = 0; i < 511; i++) {
+				_stuff[i] = keyboard_map[(uint8_t)stuff[i]];
+			}
+			vga_write(_stuff, VGA_COLOR::LIGHT_CYAN);
+			// zero it out
+			for (i = 0; i < 511; i++) {
+				stuff[i] = 0;
+			}
 			return;
 		}
 
 		// print the character
 		vidptr[current_loc++] = keyboard_map[(uint8_t) keycode];
+		stuff[calcsize()] = keycode;
 		// if we don't add an ascii bell, it triple faults or results in some very weird behavior.
 		// im probably doing something wrong here, lol.
 		vidptr[current_loc++] = 0x07;
