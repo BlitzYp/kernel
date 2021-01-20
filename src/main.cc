@@ -25,7 +25,6 @@ struct IDTEntry {
 	uint8_t type_attr;
 	uint16_t offset_higherbits;
 };
-
 IDTEntry IDT[IDT_SIZE];
 
 
