@@ -8,8 +8,7 @@ requirements for compilation:
     * should work fine on YASM or gas. 
     * recommend i686-elf-{as,gcc} or yasm with gas syntax support. we use the former
 - A C++ compiler
-    * G++ works great
-    * clang++ does weird shit
+    * G++ and Clang++ should both do the trick.
 
 to build run `sh build.sh`
 to build an iso run `sh build.sh iso` (requires grub-mkrescue and xorriso)
