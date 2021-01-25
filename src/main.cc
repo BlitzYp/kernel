@@ -1,8 +1,7 @@
 #include "keymap.hpp"
 #include <cstddef>
 #include <cstdint>
-#include "bin.hpp"
-#include "vga.hpp"
+
 
 const size_t KEYBOARD_DATA_PORT = 0x60;
 const size_t KEYBOARD_STATUS_PORT = 0x64;
@@ -14,9 +13,11 @@ extern "C" void keyboard_handler(void);
 extern "C" int8_t read_port(unsigned short port);
 extern "C" void write_port(unsigned short port, uint8_t data);
 extern "C" void load_idt(unsigned long *idt_ptr);
-extern size_t current_loc;
 
+/* current cursor location */
+unsigned int current_loc = 0;
 /* video memory begins at address 0xb8000 */
+int8_t *vidptr = (int8_t*)0xb8000;
 
 struct IDTEntry {
 	uint16_t offset_lowerbits;
@@ -25,9 +26,33 @@ struct IDTEntry {
 	uint8_t type_attr;
 	uint16_t offset_higherbits;
 };
+
 IDTEntry IDT[IDT_SIZE];
 
+uint16_t* terminal_buffer = (uint16_t*) 0xB8000;
 
+
+static const uint16_t VGA_WIDTH = 80;
+static const uint16_t VGA_HEIGHT = 25;
+
+enum VGA_COLOR {
+	BLACK = 0,
+	BLUE = 1,
+	GREEN = 2,
+	CYAN = 3,
+	RED = 4,
+	MAGENTA = 5,
+	BROWN = 6,
+	LIGHT_GREY = 7,
+	DARK_GREY = 8,
+	LIGHT_BLUE = 9,
+	LIGHT_GREEN = 10,
+	LIGHT_CYAN = 11,
+	LIGHT_RED = 12,
+	LIGHT_MAGENTA = 13,
+	LIGHT_BROWN = 14,
+	WHITE = 15
+};
 
 enum RETURN_CODES { // can be handled by the assembly later, returned by start_kernel
     HALT = 0, // all ok, halt cpu
@@ -38,6 +63,42 @@ enum RETURN_CODES { // can be handled by the assembly later, returned by start_k
     START = 5 // the kernel should start again
 };
 
+
+
+
+size_t vga_index;
+
+static inline uint8_t vga_entry_color(VGA_COLOR fg, VGA_COLOR bg) {
+	return fg | bg << 4;
+}
+ 
+static inline uint16_t vga_entry(uint8_t uc, uint8_t color) {
+	return (uint16_t) uc | (uint16_t) color << 8;
+}
+
+void init_vga_textmode() {
+	size_t terminal_color = vga_entry_color(VGA_COLOR::WHITE, VGA_COLOR::BLACK); // the terminal will be white on black. recall to change color...
+	for (size_t y = 0; y < VGA_HEIGHT; y++) {
+		for (size_t x = 0; x < VGA_WIDTH; x++) {
+			const size_t index = y * VGA_WIDTH + x;
+			terminal_buffer[index] = vga_entry(' ', terminal_color);
+		}
+	}
+}
+
+void vga_write(const char* str, VGA_COLOR fg) {
+    size_t index = 0;
+    while (str[index]) {
+    	terminal_buffer[vga_index] = (unsigned short)str[index] | (unsigned short)fg << 8; 
+        index++;
+        vga_index++;
+    }
+}
+
+void vga_putchar(const char character, VGA_COLOR fg) {
+    terminal_buffer[vga_index] = (unsigned short)character | (unsigned short)fg << 8;
+    vga_index++;
+}
 
 void init_idt() {
   unsigned long keyboard_address;
@@ -99,6 +160,20 @@ void keyboard_irq1_init() {
 	write_port(0x21, 0xFD);
 }
 
+
+void vga_write_newline() {
+	size_t line_size = 80 * 2;
+	current_loc = current_loc + (line_size - current_loc % (line_size));
+}
+
+void vga_init() {
+	unsigned int i = 0;
+	while (i < 80 * 25 * 2) {
+		vidptr[i++] = ' ';
+		vidptr[i++] = 0x07;
+	}
+}
+
 char stuff[512] = {0};
 
 size_t calcsize() {
@@ -151,7 +226,7 @@ extern "C" void keyboard_handler_main() {
 	if (status & 0x01) {
 		keycode = read_port(KEYBOARD_DATA_PORT); // read the ascii keycode from the dataport 0x60
 		if (keycode < 0) return;
-		if (keycode == ENTER_KEY_CODE) { // hit enter, so add a newline and parse
+		if (keycode == ENTER_KEY_CODE) { // hit enter, so add a newline
 			vga_write_newline();
 			char _stuff[512];
 			for (i = 0; i < 511; i++) {
@@ -162,9 +237,6 @@ extern "C" void keyboard_handler_main() {
 			for (i = 0; i < 511; i++) {
 				stuff[i] = 0;
 			}
-			// print prompt and newline
-			//vga_write_newline();
-			//vga_write(">", VGA_COLOR::WHITE);
 			return;
 		}
 
@@ -179,24 +251,11 @@ extern "C" void keyboard_handler_main() {
 
 extern "C" uint8_t _start() {
 	init_vga_textmode();
-	vga_write("shell", VGA_COLOR::WHITE);
+	vga_write("testing", VGA_COLOR::WHITE);
 	vga_write_newline();
 
 	init_idt();
 	keyboard_irq1_init();
-
-	uint8_t code[][512] = {
-		{ 1, 72 },
-		{ 1, 73 },
-		{ 1, 32 },
-		{ 1, 87 },
-		{ 1, 79 },
-		{ 1, 82 },
-		{ 1, 76 },
-		{ 1, 68 }
-	};
-	bin::parse(code);
-	
 	while (1) {}
 	return (uint8_t) RETURN_CODES::HALT;
 }

@@ -1,4 +1,3 @@
-
 OUTPUT_FORMAT(elf32-i386)
 ENTRY(start)
 SECTIONS
@@ -12,3 +11,4 @@ SECTIONS
    .bss  : { *(.bss)  }
    .multiboot : { *(.multiboot) }
  }
+

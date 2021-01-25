@@ -1,4 +1,3 @@
-
 .set MULTIBOOT_MAGIC,       0x1BADB002 # magic shit
 .set MULTIBOOT_ALIGN,       0x00000001 # align all boot modules
 .set MULTIBOOT_MEMINFO,     0x00000002 # tell the kernel about memory
@@ -60,3 +59,4 @@ hang:
 .section .bss
 .skip 8192
 stack_space:
+ 
