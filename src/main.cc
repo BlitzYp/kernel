@@ -2,11 +2,10 @@
 #include <cstddef>
 #include <cstdint>
 
-
 const size_t KEYBOARD_DATA_PORT = 0x60;
 const size_t KEYBOARD_STATUS_PORT = 0x64;
 const size_t ENTER_KEY_CODE = 0x1C;
-const size_t IDT_SIZE = 256; 
+const size_t IDT_SIZE = 256;
 
 extern uint8_t keyboard_map[128];
 extern "C" void keyboard_handler(void);
@@ -14,12 +13,11 @@ extern "C" int8_t read_port(unsigned short port);
 extern "C" void write_port(unsigned short port, uint8_t data);
 extern "C" void load_idt(unsigned long *idt_ptr);
 
-/* current cursor location */
-unsigned int current_loc = 0;
 /* video memory begins at address 0xb8000 */
-int8_t *vidptr = (int8_t*)0xb8000;
+int8_t *vidptr = (int8_t *)0xb8000;
 
-struct IDTEntry {
+struct IDTEntry
+{
 	uint16_t offset_lowerbits;
 	uint16_t selector;
 	uint8_t zero;
@@ -29,13 +27,13 @@ struct IDTEntry {
 
 IDTEntry IDT[IDT_SIZE];
 
-uint16_t* terminal_buffer = (uint16_t*) 0xB8000;
-
+uint16_t *terminal_buffer = (uint16_t *)0xB8000;
 
 static const uint16_t VGA_WIDTH = 80;
 static const uint16_t VGA_HEIGHT = 25;
 
-enum VGA_COLOR {
+enum VGA_COLOR
+{
 	BLACK = 0,
 	BLUE = 1,
 	GREEN = 2,
@@ -54,121 +52,131 @@ enum VGA_COLOR {
 	WHITE = 15
 };
 
-enum RETURN_CODES { // can be handled by the assembly later, returned by start_kernel
-    HALT = 0, // all ok, halt cpu
-    REBOOT = 1, // perform reboot
-    SHUTDOWN = 2, // shutdown
-    NOTHING = 3, // nothing
-    PANIC = 4, // panic was already thrown, so this prints some descriptive message and hangs
-    START = 5 // the kernel should start again
+enum RETURN_CODES
+{				  // can be handled by the assembly later, returned by start_kernel
+	HALT = 0,	  // all ok, halt cpu
+	REBOOT = 1,	  // perform reboot
+	SHUTDOWN = 2, // shutdown
+	NOTHING = 3,  // nothing
+	PANIC = 4,	  // panic was already thrown, so this prints some descriptive message and hangs
+	START = 5	  // the kernel should start again
 };
-
-
-
 
 size_t vga_index;
 
-static inline uint8_t vga_entry_color(VGA_COLOR fg, VGA_COLOR bg) {
+static inline uint8_t vga_entry_color(VGA_COLOR fg, VGA_COLOR bg)
+{
 	return fg | bg << 4;
 }
- 
-static inline uint16_t vga_entry(uint8_t uc, uint8_t color) {
-	return (uint16_t) uc | (uint16_t) color << 8;
+
+static inline uint16_t vga_entry(uint8_t uc, uint8_t color)
+{
+	return (uint16_t)uc | (uint16_t)color << 8;
 }
 
-void init_vga_textmode() {
+void init_vga_textmode()
+{
 	size_t terminal_color = vga_entry_color(VGA_COLOR::WHITE, VGA_COLOR::BLACK); // the terminal will be white on black. recall to change color...
-	for (size_t y = 0; y < VGA_HEIGHT; y++) {
-		for (size_t x = 0; x < VGA_WIDTH; x++) {
+	for (size_t y = 0; y < VGA_HEIGHT; y++)
+	{
+		for (size_t x = 0; x < VGA_WIDTH; x++)
+		{
 			const size_t index = y * VGA_WIDTH + x;
 			terminal_buffer[index] = vga_entry(' ', terminal_color);
 		}
 	}
 }
 
-void vga_write(const char* str, VGA_COLOR fg) {
-    size_t index = 0;
-    while (str[index]) {
-    	terminal_buffer[vga_index] = (unsigned short)str[index] | (unsigned short)fg << 8; 
-        index++;
-        vga_index++;
-    }
+void vga_write(const char *str, VGA_COLOR fg)
+{
+	size_t index = 0;
+	while (str[index])
+	{
+		terminal_buffer[vga_index] = (unsigned short)str[index] | (unsigned short)fg << 8;
+		index++;
+		vga_index++;
+	}
 }
 
-void vga_putchar(const char character, VGA_COLOR fg) {
-    terminal_buffer[vga_index] = (unsigned short)character | (unsigned short)fg << 8;
-    vga_index++;
+void vga_putchar(const char character, VGA_COLOR fg)
+{
+	terminal_buffer[vga_index] = (unsigned short)character | (unsigned short)fg << 8;
+	vga_index++;
 }
 
-void init_idt() {
-  unsigned long keyboard_address;
-  unsigned long idt_address;
-  unsigned long idt_ptr[2];
+void init_idt()
+{
+	unsigned long keyboard_address;
+	unsigned long idt_address;
+	unsigned long idt_ptr[2];
 
-  // get address of the keyboard handler function...
-  keyboard_address = (unsigned long)keyboard_handler;
-  // and register yourself, ask for it to call that function...
-  IDT[0x21].offset_lowerbits = keyboard_address & 0xffff;
-  IDT[0x21].selector = 0x08;
-  IDT[0x21].zero = 0;
-  IDT[0x21].type_attr = 0x8e;
-  IDT[0x21].offset_higherbits = (keyboard_address & 0xffff0000) >> 16;
+	// get address of the keyboard handler function...
+	keyboard_address = (unsigned long)keyboard_handler;
+	// and register yourself, ask for it to call that function...
+	IDT[0x21].offset_lowerbits = keyboard_address & 0xffff;
+	IDT[0x21].selector = 0x08;
+	IDT[0x21].zero = 0;
+	IDT[0x21].type_attr = 0x8e;
+	IDT[0x21].offset_higherbits = (keyboard_address & 0xffff0000) >> 16;
 
-  /*     Ports
+	/*     Ports
    *	 PIC1	PIC2
    *Command 0x20	0xA0
    *Data	 0x21	0xA1
    */
 
-  // almost all of this writing and reading from ports is from
-  // https://pdos.csail.mit.edu/6.828/2014/readings/hardware/8259A.pdf. very
-  // useful resource
+	// almost all of this writing and reading from ports is from
+	// https://pdos.csail.mit.edu/6.828/2014/readings/hardware/8259A.pdf. very
+	// useful resource
 
-  // start everything
-  write_port(0x20, 0x11);
-  write_port(0xA0, 0x11);
+	// start everything
+	write_port(0x20, 0x11);
+	write_port(0xA0, 0x11);
 
-  // if we are in protected mode, which we will be in the future we need to
-  // remap the PICs because the first 32 (0x20 == 32) are reserved. so increase
-  // the offset. so set icw2.
-  write_port(0x21, 0x20);
-  write_port(0xA1, 0x28);
+	// if we are in protected mode, which we will be in the future we need to
+	// remap the PICs because the first 32 (0x20 == 32) are reserved. so increase
+	// the offset. so set icw2.
+	write_port(0x21, 0x20);
+	write_port(0xA1, 0x28);
 
-  // setup listening for interrupts with icw3.
-  write_port(0x21, 0x00);
-  write_port(0xA1, 0x00);
+	// setup listening for interrupts with icw3.
+	write_port(0x21, 0x00);
+	write_port(0xA1, 0x00);
 
-  // get info about the environment by writing to icw4.
-  write_port(0x21, 0x01);
-  write_port(0xA1, 0x01);
-  // finished initalizing.
+	// get info about the environment by writing to icw4.
+	write_port(0x21, 0x01);
+	write_port(0xA1, 0x01);
+	// finished initalizing.
 
-  // mask all interrupts with 0xff
-  write_port(0x21, 0xff);
-  write_port(0xA1, 0xff);
+	// mask all interrupts with 0xff
+	write_port(0x21, 0xff);
+	write_port(0xA1, 0xff);
 
-  // populate the IDT descriptor
-  idt_address = (unsigned long)IDT;
-  idt_ptr[0] = ((sizeof(IDTEntry)) * 256) + ((idt_address & 0xffff) << 16);
-  idt_ptr[1] = idt_address >> 16;
+	// populate the IDT descriptor
+	idt_address = (unsigned long)IDT;
+	idt_ptr[0] = ((sizeof(IDTEntry)) * 256) + ((idt_address & 0xffff) << 16);
+	idt_ptr[1] = idt_address >> 16;
 
-  load_idt(idt_ptr);
+	load_idt(idt_ptr);
 }
 
-void keyboard_irq1_init() {
-	// 0xFD corresponds to IRQ1, we can read this for keyboard interrupts 
+void keyboard_irq1_init()
+{
+	// 0xFD corresponds to IRQ1, we can read this for keyboard interrupts
 	write_port(0x21, 0xFD);
 }
 
-
-void vga_write_newline() {
+void vga_write_newline()
+{
 	size_t line_size = 80 * 2;
-	current_loc = current_loc + (line_size - current_loc % (line_size));
+	vga_index = vga_index + (line_size - vga_index % (line_size));
 }
 
-void vga_init() {
+void vga_init()
+{
 	unsigned int i = 0;
-	while (i < 80 * 25 * 2) {
+	while (i < 80 * 25 * 2)
+	{
 		vidptr[i++] = ' ';
 		vidptr[i++] = 0x07;
 	}
@@ -176,38 +184,52 @@ void vga_init() {
 
 char stuff[512] = {0};
 
-size_t calcsize() {
+size_t calcsize()
+{
 	size_t counter = 0;
-	for (size_t y = 0; y < 511; y++) {
-		if (stuff[y] != 0) {
+	for (size_t y = 0; y < 511; y++)
+	{
+		if (stuff[y] != 0)
+		{
 			counter++;
 		}
 	}
 	return counter;
 }
 
-size_t strlen(const char* str) {
+size_t strlen(const char *str)
+{
 	size_t x = 0;
-	while (*str) x++;
+	while (*str)
+		x++;
 	return x;
 }
 
-bool strequ(const char *l, const char *r) {
-    for (;*l == *r && *l; l++, r++);
-    return *l == *r;
+bool strequ(const char *l, const char *r)
+{
+	for (; *l == *r && *l; l++, r++)
+		;
+	return *l == *r;
 }
 
-void command_parse(const char* command) {
-	if (strequ(command, "bloat")) {
+void command_parse(const char *command)
+{
+	if (strequ(command, "bloat"))
+	{
 		vga_write("Congrats, you have successfully bloated; nice.", VGA_COLOR::WHITE);
-	} else if (strequ(command, "morebloat")) {
+	}
+	else if (strequ(command, "morebloat"))
+	{
 		vga_write("More bloat? Ok then...", VGA_COLOR::WHITE);
-	} else {
+	}
+	else
+	{
 		vga_write(command, VGA_COLOR::WHITE);
 	}
 }
 
-extern "C" void keyboard_handler_main() {
+extern "C" void keyboard_handler_main()
+{
 
 	// send an End-Of-Interrupt (0x20) to port 0x20.
 	// not issuing an EOI makes it think we are still reading
@@ -221,41 +243,157 @@ extern "C" void keyboard_handler_main() {
 	int8_t keycode;
 	size_t i;
 
-    // first bit, 0x01 (or 1) of the status from the keyboard status port 0x64 will be set to 1 if the buffer of text is not empty;
+	// first bit, 0x01 (or 1) of the status from the keyboard status port 0x64 will be set to 1 if the buffer of text is not empty;
 	// in other words, a key has been pressed
-	if (status & 0x01) {
+	if (status & 0x01)
+	{
 		keycode = read_port(KEYBOARD_DATA_PORT); // read the ascii keycode from the dataport 0x60
-		if (keycode < 0) return;
-		if (keycode == ENTER_KEY_CODE) { // hit enter, so add a newline
-			vga_write_newline();
+		if (keycode < 0)
+			return;
+		if (keycode == ENTER_KEY_CODE)
+		{ // hit enter, so add a newline
 			char _stuff[512];
-			for (i = 0; i < 511; i++) {
-				_stuff[i] = keyboard_map[(uint8_t) stuff[i]];
+			for (i = 0; i < 511; i++)
+			{
+				_stuff[i] = keyboard_map[(uint8_t)stuff[i]];
 			}
 			command_parse(_stuff);
 			// zero it out
-			for (i = 0; i < 511; i++) {
+			for (i = 0; i < 511; i++)
+			{
 				stuff[i] = 0;
 			}
 			return;
 		}
 
 		// print the character
-		vidptr[current_loc++] = keyboard_map[(uint8_t) keycode];
+		vga_putchar(keyboard_map[(uint8_t)keycode], VGA_COLOR::LIGHT_CYAN);
 		stuff[calcsize()] = keycode;
 		// if we don't add an ascii bell, it triple faults or results in some very weird behavior.
 		// im probably doing something wrong here, lol.
-		vidptr[current_loc++] = 0x07;
 	}
 }
 
-extern "C" uint8_t _start() {
+/*
+	Until we implement paging, this serves as one 
+	block of memory in the 32*1024 buffer 
+	given to the process.
+
+	allocated: represents whether this block of memory is currently allocated (in use)
+	value: the block's value if it is allocated, otherwise null. represented by a null ptr..
+*/
+
+// implements the most minimal and high level binary format to ever exist
+// code takes the form of OPCODE OFFSET AMOUNT.
+// OPCODE is the operation to execute
+// OFFSET is the offset on the stack to start reading arguments at
+// AMOUNT is the how many elements on the stack to read.
+// esp, a pointer the beginning of the stack, is used. the kernel has a 64k byte stack, although 1-2k bytes will be in use by the kernel
+// due to no feasible heap allocation just yet. always program with a 54K byte stack in mind, just to be on the extremely safe side.
+// remember; pointers to stack elements are just numbers, addresses.
+// the only type is uint32_t, a 32 bit unsigned integer.
+// the stack is composed of 1024 32 bit unsigned integers but isn't a real stack.
+// it's just a buffer because copy constructors are not yet implemented, so no real classes :(
+// register allocation and accessing is TBD.
+// heap allocation and accessing is TBD.
+
+uint32_t *buffer[1024];
+
+/*
+	Get the inhabited number of elements in the not-really-a-stack buffer.
+	returns the offset of thefirst block (offset from buffer, buffer[i] or *(buffer + i))
+	of free memory in the buffer.
+*/
+
+uint32_t get_inhabited_stack()
+{
+	for (size_t i = 0; i < (sizeof buffer / sizeof *buffer); i++)
+	{
+		if (!buffer[i])
+		{ // this block is not inhabited!
+			return i;
+		}
+	}
+	return 0;
+}
+
+enum MemoryErrors
+{
+	TRIED_TO_ACCESS_NONEXISTENT = 1,
+	ALREADY_ALLOCATED = 2
+};
+
+/*
+		Execute a block of binary code.
+		op: opcode (uint32_t)
+		off: stack offset
+		num: how many elements to read from the stack for functions like print string, opcode TBD. also used for the value in opcode 1.
+		returns status, except op3, in which case it returns the amount of inhabited elements in the stack.
+*/
+uint32_t execute(uint32_t op, uint32_t off, uint32_t num)
+{
+	switch (op) {
+	case 0: // halt the CPU
+		while (1);
+		break;
+	case 1: // write to the stack
+		if (buffer[off])
+		{
+			vga_write("usermode panic: block of memory is already allocated", VGA_COLOR::RED);
+			vga_write_newline();
+			vga_write("at: opcode 1 (WRITE_MEM)", VGA_COLOR::RED);
+			vga_write_newline();
+			return MemoryErrors::ALREADY_ALLOCATED;
+		}
+		buffer[off] = &num;
+		break;
+	case 2: // free a block of memory at offset
+		buffer[off] = nullptr;
+		break;
+	case 3: // grab the amount of inhabited elements
+		return get_inhabited_stack();
+		break;
+	case 4: // write a character from the given stack address
+		if (!buffer[off])
+		{
+			vga_write("usermode panic: tried to access nonexistent memory", VGA_COLOR::RED);
+			vga_write_newline();
+			vga_write("at: opcode 4 (PUTCHAR)", VGA_COLOR::RED);
+			vga_write_newline();
+			return MemoryErrors::TRIED_TO_ACCESS_NONEXISTENT;
+		}
+		vga_putchar(*buffer[off], VGA_COLOR::WHITE);
+		break;
+	case 5: // write newline
+		vga_write_newline();
+		break;
+	default:
+		vga_write("usermode panic: unrecognized opcode attempted, ignoring", VGA_COLOR::RED);
+		vga_write_newline();
+	}
+	return 0;
+}
+
+
+extern "C" uint8_t _start()
+{
 	init_vga_textmode();
 	vga_write("testing", VGA_COLOR::WHITE);
 	vga_write_newline();
 
 	init_idt();
 	keyboard_irq1_init();
-	while (1) {}
-	return (uint8_t) RETURN_CODES::HALT;
+
+	execute(1, 6, 2);				   // write to memory address 6
+	uint32_t _free = execute(3, 0, 0); // get the address to the next block of FREE memory
+	execute(1, _free, (uint32_t)'f');  // set it to used, put 'f' in it
+	execute(4, _free, 0);			   // write the char
+	execute(2, 6, 0);				   // free the block allocated at address 6
+	execute(2, _free, 0);			   // and the one that was allocated wherever free blocks of memory were found
+	execute(4, _free, 0);			   // testing usermode panics
+
+	while (1)
+	{
+	}
+	return (uint8_t)RETURN_CODES::HALT;
 }
