@@ -1,6 +1,6 @@
 # nasm -f elf32 src/boot.s -o boot.o
 yasm -p gas -f elf32 src/boot.s -o boot.o 
-clang++ -m32 -c src/main.cc -o kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions -fno-rtti
+gcc -m32 -c src/main.c -o kernel.o -ffreestanding -O2 -Wall -Wextra -fno-exceptions
 ld -m elf_i386 -T src/linker.ld -o kernel.bin boot.o kernel.o
 echo "Built kernel.bin."
 if test "$1" = "iso"; then
