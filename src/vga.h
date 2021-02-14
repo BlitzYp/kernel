@@ -75,16 +75,17 @@ void vga_putentryat(char c, uint8_t color, size_t x, size_t y)
     const size_t index = y * VGA_WIDTH + x;
     vga_buffer[index] = vga_entry(c, color);
 }
-size_t x;
+size_t z;
 
 void vga_backspace() {
-    vga_buffer[(vga_row * VGA_WIDTH + vga_column) - ++x] = ' ';
+    vga_buffer[(vga_row * VGA_WIDTH + vga_column) - ++z] = ' ';
+    vga_row--;
+    vga_column++;
 }
 
 void vga_write_newline() {
     vga_row++;
     vga_column = 0;
-    x = 0;
 }
 
 void vga_putchar(char c, enum vga_color color)
