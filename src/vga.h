@@ -78,9 +78,8 @@ void vga_putentryat(char c, uint8_t color, size_t x, size_t y)
 size_t z;
 
 void vga_backspace() {
-    vga_buffer[(vga_row * VGA_WIDTH + vga_column) - ++z] = ' ';
-    vga_row--;
-    vga_column++;
+    vga_buffer[(vga_row * VGA_WIDTH + vga_column) - z] = ' ';
+    z++;   
 }
 
 void vga_write_newline() {

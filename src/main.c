@@ -105,6 +105,7 @@ int init_idt() {
 int init_ps2_keyboard() {
   // 0xFD corresponds to IRQ1, we can read this for keyboard interrupts
   write_port(0x21, 0xFD);
+
   return 0;
 }
 

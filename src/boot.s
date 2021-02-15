@@ -13,14 +13,14 @@ multiboot_header:
 
 .section .text
 
-# exports to C++:
+# exports to C
 .global start
 .global keyboard_handler
 .global read_port
 .global write_port
 .global load_idt
 
-# imports from C++:
+# imports from C
 .extern _start 
 .extern keyboard_handler_main
 
@@ -46,10 +46,9 @@ keyboard_handler:
     iretl
 
 start:
-    cli 
+    cli
     movl $stack_space, %esp
     call _start
-    cli
     jmp hang
 
 hang:
